@@ -2,11 +2,13 @@ __author__ = 'bokuto'
 
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
-from subprocess import PIPE, TimeoutExpired
+from subprocess import PIPE, TimeoutExpired, Popen
+from os import chmod
 import psutil
 import platform
 import operator
-
+import stat
+import sys
 
 class MulticastPingPong(DatagramProtocol):
     def __init__(self):
@@ -14,6 +16,7 @@ class MulticastPingPong(DatagramProtocol):
         self.filename = 'default_loaded_filename'
         self.filedict = dict()
         self.last_file_size = 0
+        self.multicast_addr = ("224.0.1.224", 8005)
         pass
 
     def startProtocol(self):
@@ -23,7 +26,7 @@ class MulticastPingPong(DatagramProtocol):
         # Set the TTL>1 so multicast will cross router hops:
         self.transport.setTTL(5)
         # Join a specific multicast group:
-        self.transport.joinGroup("224.0.1.224")
+        self.transport.joinGroup(self.multicast_addr[0])
         pass
 
     def datagramReceived(self, datagram, address):
@@ -48,7 +51,7 @@ class MulticastPingPong(DatagramProtocol):
                                                                 platform.architecture(),
                                                                 platform.machine())
             info = preambula + command + info.encode()
-            self.transport.write(info, ("224.0.1.224", 8005))
+            self.transport.write(info, self.multicast_addr)
             return
 
 
@@ -77,26 +80,33 @@ class MulticastPingPong(DatagramProtocol):
             return
 
         if self.state == 'WAIT' and command == b'startbin':
-            self.state == 'WORK'
-            data = data.decode().split('/')
-            args = data[0].split()
-            ins = data[1].split()
-            execstr = [self.filename].append(*args)
-            proc = psutil.Popen(execstr, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+            self.state = 'WORK'
+            data = data.decode()
+            args = data.split()
+            chmod('./' + self.filename, stat.S_IRWXU)
+            execstr = ['./' + self.filename] + args
+            proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
             try:
-                outs, errs = proc.communicate(input=ins, timeout=300)
+                outs, errs = proc.communicate(timeout=3)
             except TimeoutExpired:
                 proc.kill()
                 outs, errs = proc.communicate()
-            ret = bytearray((outs, errs, proc.returncode))
+            print(outs, errs, proc.returncode)
+            ret = bytearray(outs)
+            ret += bytearray(errs)
+            ret += int(proc.returncode).to_bytes(2, byteorder='big')
 
-            self.transport.write(b'11001100return__' + ret, ("224.0.1.224", 8005))
+            self.transport.write(b'11001100return__' + ret, self.multicast_addr)
+            self.state = 'WAIT'
             return
+
 
         return
 
-# We use listenMultiple=True so that we can run MulticastServer.py and
-# MulticastClient.py on same machine:
-reactor.listenMulticast(8005, MulticastPingPong(),
-                        listenMultiple=True)
-reactor.run()
+def main():
+    reactor.listenMulticast(8005, MulticastPingClient(filename), listenMultiple=True)
+    reactor.run()
+
+if __name__ == "__main__":
+    ret = main()
+    sys.exit(ret)
