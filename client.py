@@ -1,5 +1,5 @@
 __author__ = 'bokuto'
-
+from functools import partial
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
 import sys
@@ -8,34 +8,37 @@ import sys
 class MulticastPingClient(DatagramProtocol):
     def __init__(self, _filename):
         self.filename = _filename
+        self.machines = dict()
 
     def startProtocol(self):
-        # Join the multicast address, so we can receive replies:
         self.transport.joinGroup("224.0.1.224")
-        # Send to 228.0.0.5:8005 - all listeners on the multicast address
-        # (including us) will receive this message.
-        self.machines = dict()
         self.transport.write(b'00110011' + 'register'.encode(), ("224.0.1.224", 8005))
-        with open("README.md", 'br') as f:
-            read_data = f.read()
-        sendstr = b'00110011' + 'loadload'.encode()
-        sendstr += read_data
+
+
+        with open(self.filename, 'br') as f:
+            i = 0
+            for chunk in iter(partial(f.read, 4 * 1024), b''):
+                sendstr = b'00110011' + b'loadload' + i.to_bytes(2, byteorder='big') + chunk
+                self.transport.write(sendstr, ("224.0.1.224", 8005))
+                i += 1
+                pass
+
+        sendstr = b'00110011' + b'endoload'
         self.transport.write(sendstr, ("224.0.1.224", 8005))
 
     def datagramReceived(self, datagram, address):
         print("Datagram %s received from %s" % (repr(datagram), repr(address)))
         # Parse the command
-        commandParts = datagram.decode().split()
-        if (commandParts[0] != "11001100"):
+        preambula   = datagram[0:8]
+        command     = datagram[8:16]
+        data        = datagram[16:]
+        if preambula != b'11001100':
             print("Error: Command doesn't start from cmd sequence")
             return
-
-        command = commandParts[1].lower()
-        args = commandParts[2:]
-        if (command == "answer"):
-            self.machines[address] = args
-        elif (command == "return"):
-            print(repr(self.machines[address]) + ": " + args)
+        command = command.lower()
+        if (command == b"answer__"):
+            self.machines[address] = data
+            print(str(address) + ": \n" + data.decode())
 
 
 def main():
