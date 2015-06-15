@@ -154,6 +154,28 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             self.transport.write(b'11001100return__' + ret, self.multicast_address)
             self.state = 'WAIT'
             return
+	
+	if self.state == 'WAIT' and command == b'extrmtar':
+		self.state = 'WORK'	
+
+		tfile = tarfile.open(filename)
+		extractPath = filename.split("/")[-1].split(".")[0]+"/"
+		tfile.extractall(path=extractPath)
+
+        	execstr = ["make", "-f", "./" + extractPath + "Makefile"]
+        	proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
+		
+		try:
+	                outs, errs = proc.communicate(timeout=3)
+	        except TimeoutExpired:
+                	proc.kill()
+                	outs, errs = proc.communicate()
+            	print(outs, errs, proc.returncode)
+            	ret = bytes(outs)
+            	ret += bytes(errs)
+            	ret += int(proc.returncode).to_bytes(2, byteorder='big')
+		return
+
 
         return
 
