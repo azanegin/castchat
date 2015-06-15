@@ -10,6 +10,7 @@ import platform
 import operator
 import stat
 import sys
+import tarfile
 
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor, defer
@@ -45,6 +46,8 @@ class MulticastDevopsClientProtocol(DatagramProtocol):
             for x in range(self.args_list.tries):
                 self.transport.write(b'00110011startbin' + self.args_list.exec, self.multicast_address)
                 sleep(3)
+        else:
+            self.transport.write(b'00110011makearch', self.multicast_address)
         return
 
     def datagramReceived(self, datagram, address):
@@ -154,28 +157,27 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             self.transport.write(b'11001100return__' + ret, self.multicast_address)
             self.state = 'WAIT'
             return
-	
-	if self.state == 'WAIT' and command == b'extrmtar':
-		self.state = 'WORK'	
 
-		tfile = tarfile.open(filename)
-		extractPath = filename.split("/")[-1].split(".")[0]+"/"
-		tfile.extractall(path=extractPath)
+        if self.state == 'WAIT' and command == b'makearch':
+            self.state = 'WORK'
 
-        	execstr = ["make", "-f", "./" + extractPath + "Makefile"]
-        	proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
-		
-		try:
-	                outs, errs = proc.communicate(timeout=3)
-	        except TimeoutExpired:
-                	proc.kill()
-                	outs, errs = proc.communicate()
-            	print(outs, errs, proc.returncode)
-            	ret = bytes(outs)
-            	ret += bytes(errs)
-            	ret += int(proc.returncode).to_bytes(2, byteorder='big')
-		return
+            tfile = tarfile.open(self.filename)
+            extractPath = self.filename.split("/")[-1].split(".")[0] + "/"
+            tfile.extractall(path=extractPath)
 
+            execstr = ["make", "-f", "./" + extractPath + "Makefile"]
+            proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
+
+            try:
+                outs, errs = proc.communicate(timeout=10)
+            except TimeoutExpired:
+                proc.kill()
+                outs, errs = proc.communicate()
+            print(outs, errs, proc.returncode)
+            ret = bytes(outs)
+            ret += bytes(errs)
+            ret += int(proc.returncode).to_bytes(2, byteorder='big')
+            return
 
         return
 
