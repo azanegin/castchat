@@ -77,7 +77,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         self.whitelist = None
         if _whitelist is not None:
             with open(_whitelist, 'r') as wlfile:
-                self.whitelist = [line for line in wlfile]
+                self.whitelist = [line.rstrip('\n') for line in wlfile]
         self.multicast_address = ("224.0.1.224", portnum)
         return
 
