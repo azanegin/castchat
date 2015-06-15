@@ -169,10 +169,10 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
 
             try:
-                outs, errs = proc.communicate(timeout=10)
+                outs, errs = proc.wait(timeout=3)
             except TimeoutExpired:
                 proc.kill()
-                outs, errs = proc.communicate()
+                outs, errs = 0, 0
             print(outs, errs, proc.returncode)
             ret = bytes(outs)
             ret += bytes(errs)
