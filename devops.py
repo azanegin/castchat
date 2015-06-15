@@ -141,8 +141,10 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             self.state = 'WORK'
             data = data.decode()
             args = data.split()
-            chmod('./' + self.filename, stat.S_IRWXU)
+            print(self.filename)
+            chmod('./' + self.filename, stat.S_IXUSR)
             execstr = ['./' + self.filename] + args
+            print(execstr)
             proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
             try:
                 outs, errs = proc.communicate(timeout=3)
