@@ -154,7 +154,7 @@ def main():
     filename = None
     port_number = None
     is_server = None
-    parser = argparse.ArgumentParser(prog="devopsscript", description="Code or binary over LAN execution", version="0.1")
+    parser = argparse.ArgumentParser(prog="devopsscript", description="Code or binary over LAN execution")
     parser.add_argument('--filename', action="store", dest='filename', type=str, default="defaultfile")
     parser.add_argument('--server', action="store_true", dest='is_server')
     parser.add_argument('--port', action="store", dest="port_number", default=8005)
