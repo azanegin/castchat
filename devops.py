@@ -74,8 +74,10 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         self.filename = "defaultfile"
         self.file_dict = dict()
         self.last_file_size = 0
-        with open(_whitelist, 'r') as wlfile:
-            self.whitelist = [line for line in wlfile]
+        self.whitelist = None
+        if _whitelist is not None:
+            with open(_whitelist, 'r') as wlfile:
+                self.whitelist = [line for line in wlfile]
         self.multicast_address = ("224.0.1.224", portnum)
         return
 
@@ -96,7 +98,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         command = datagram[8:16]
         data = datagram[16:]
 
-        if address[0] not in self.whitelist:
+        if self.whitelist is not None and address[0] not in self.whitelist:
             print("IP Address not in whitelist, ignored")
             return
 
