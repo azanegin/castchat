@@ -175,7 +175,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             print(proc.returncode)
             # ret = bytes(outs)
             # ret += bytes(errs)
-            ret += int(proc.returncode).to_bytes(2, byteorder='big')
+            ret = int(proc.returncode).to_bytes(2, byteorder='big')
             return
 
         return
