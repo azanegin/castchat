@@ -157,7 +157,6 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
 		extractPath = filename.split("/")[-1].split(".")[0]+"/"
 		tfile.extractall(path=extractPath)
 
-		chmod("./"+extractPath+"Makefile", stat.S_IRWXU)
         	execstr = ["make", "-f", "./" + extractPath + "Makefile"]
         	proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
 		
