@@ -18,27 +18,27 @@ import sys
 
 
 class MulticastDevopsClientProtocol(DatagramProtocol):
-    def __init__(self, _filename):
+    def __init__(self, port_number, _filename):
         self.filename = _filename
         self.machines = dict()
-        self.multicast_addr = ("224.0.1.224", 8005)
+        self.multicast_address = ("224.0.1.224", port_number)
 
     def startProtocol(self):
-        self.transport.joinGroup(self.multicast_addr[0])
-        self.transport.write(b'00110011' + 'register'.encode(), self.multicast_addr)
+        self.transport.joinGroup(self.multicast_address[0])
+        self.transport.write(b'00110011' + 'register'.encode(), self.multicast_address)
 
 
         with open(self.filename, 'br') as f:
             i = 0
             for chunk in iter(partial(f.read, 4 * 1024), b''):
                 sendstr = b'00110011' + b'loadload' + i.to_bytes(2, byteorder='big') + chunk
-                self.transport.write(sendstr, self.multicast_addr)
+                self.transport.write(sendstr, self.multicast_address)
                 i += 1
                 pass
 
         sendstr = b'00110011' + b'endoload'
-        self.transport.write(sendstr, self.multicast_addr)
-        self.transport.write(b'00110011startbinkhoooy pesda/ya ebu sobak', self.multicast_addr)
+        self.transport.write(sendstr, self.multicast_address)
+        self.transport.write(b'00110011startbinkhoooy pesda/ya ebu sobak', self.multicast_address)
 
     def datagramReceived(self, datagram, address):
         print("Datagram %s received from %s" % (repr(datagram), repr(address)))
@@ -59,13 +59,13 @@ class MulticastDevopsClientProtocol(DatagramProtocol):
 
 
 class MulticastDevopsServerProtocol(DatagramProtocol):
-    def __init__(self):
+    def __init__(self, portnum):
         self.state = 'WAIT'
-        self.filename = 'default_loaded_filename'
+        self.filename = "defaultfile"
         self.filedict = dict()
         self.last_file_size = 0
-        self.multicast_addr = ("224.0.1.224", 8005)
-        pass
+        self.multicast_addr = ("224.0.1.224", portnum)
+        return
 
     def startProtocol(self):
         """
@@ -75,7 +75,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         self.transport.setTTL(5)
         # Join a specific multicast group:
         self.transport.joinGroup(self.multicast_addr[0])
-        pass
+        return
 
     def datagramReceived(self, datagram, address):
         print("Datagram %s received from %s" % (repr(datagram), repr(address)))
@@ -148,13 +148,21 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             self.state = 'WAIT'
             return
 
-
         return
 
 def main():
-    parser = argparse.ArgumentParser(description="Code or binary over LAN execution")
-    parser.add_argument('--filename', dest='binfile', )
-    reactor.listenMulticast(8005, MulticastDevopsClientProtocol(filename), listenMultiple=True)
+    filename = None
+    port_number = None
+    is_server = None
+    parser = argparse.ArgumentParser(prog="devopsscript", description="Code or binary over LAN execution")
+    parser.add_argument('--filename', action="store", dest='filename', type=str, default="defaultfile")
+    parser.add_argument('--server', action="store_true", dest='is_server')
+    parser.add_argument('--port', action="store", dest="port_number", default=8005)
+    parser.parse_args()
+    if is_server:
+        reactor.listenMulticast(port_number, MulticastDevopsServerProtocol(port_number), listenMultiple=True)
+    else:
+        reactor.listenMulticast(port_number, MulticastDevopsClientProtocol(port_number, filename), listenMultiple=True)
     reactor.run()
 
 if __name__ == "__main__":
