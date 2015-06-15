@@ -69,11 +69,15 @@ class MulticastDevopsClientProtocol(DatagramProtocol):
 
 
 class MulticastDevopsServerProtocol(DatagramProtocol):
-    def __init__(self, portnum):
+    def __init__(self, portnum, _whitelist):
         self.state = 'WAIT'
         self.filename = "defaultfile"
         self.file_dict = dict()
         self.last_file_size = 0
+        self.whitelist = None
+        if _whitelist is not None:
+            with open(_whitelist, 'r') as wlfile:
+                self.whitelist = [line.rstrip('\n') for line in wlfile]
         self.multicast_address = ("224.0.1.224", portnum)
         return
 
@@ -93,6 +97,13 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         preambula = datagram[0:8]
         command = datagram[8:16]
         data = datagram[16:]
+
+        print(self.whitelist)
+        print(address[0])
+        print(address[0] not in self.whitelist)
+        if self.whitelist is not None and address[0] not in self.whitelist:
+            print("IP Address not in whitelist, ignored")
+            return
 
         if preambula != b'00110011':
             print("Ignored")
@@ -141,8 +152,10 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             self.state = 'WORK'
             data = data.decode()
             args = data.split()
-            chmod('./' + self.filename, stat.S_IRWXU)
+            print(self.filename)
+            chmod('./' + self.filename, stat.S_IXUSR | stat.S_IRUSR)
             execstr = ['./' + self.filename] + args
+            print(execstr)
             proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
             try:
                 outs, errs = proc.communicate(timeout=3)
@@ -175,7 +188,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             print(proc.returncode)
             # ret = bytes(outs)
             # ret += bytes(errs)
-            ret += int(proc.returncode).to_bytes(2, byteorder='big')
+            ret = int(proc.returncode).to_bytes(2, byteorder='big')
             return
 
         return
@@ -198,14 +211,14 @@ def main():
                                            help="If localfile is binary or script")
         parser.add_argument('--execstr', action="store", type=str, required=True,
                             help="Your regular shell exec: filename and args, to be launched on remote machine")
-
         args, other_args = parser.parse_known_args()
     elif init_args.server is True:
         parser = argparse.ArgumentParser(parents=[init_parser])
+        parser.add_argument('--whitelist', action="store", type=str, help="File with allowed IP's, in A.B.C.D format")
         args, other_args = parser.parse_known_args()
 
     if init_args.server:
-        reactor.listenMulticast(init_args.port, MulticastDevopsServerProtocol(init_args.port),
+        reactor.listenMulticast(init_args.port, MulticastDevopsServerProtocol(init_args.port, args.whitelist),
                                 listenMultiple=True)
     else:
         reactor.listenMulticast(init_args.port, MulticastDevopsClientProtocol(init_args.port, args),
