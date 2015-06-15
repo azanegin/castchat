@@ -5,14 +5,16 @@ __author__ = 'bokuto'
 from subprocess import PIPE, TimeoutExpired, Popen
 from os import chmod
 from functools import partial
-from twisted.internet.protocol import DatagramProtocol
-from twisted.internet import reactor
-
 import argparse
 import platform
 import operator
 import stat
 import sys
+
+from twisted.internet.protocol import DatagramProtocol
+from twisted.internet import reactor
+
+
 # import psutil
 
 
@@ -140,8 +142,8 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
                 proc.kill()
                 outs, errs = proc.communicate()
             print(outs, errs, proc.returncode)
-            ret = bytearray(outs)
-            ret += bytearray(errs)
+            ret = bytes(outs)
+            ret += bytes(errs)
             ret += int(proc.returncode).to_bytes(2, byteorder='big')
 
             self.transport.write(b'11001100return__' + ret, self.multicast_addr)
@@ -151,15 +153,27 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         return
 
 def main():
-    init_parser = argparse.ArgumentParser(description="Code or binary over LAN execution")
-    init_parser.add_argument('--port', action="store", type=int, default=8005)
+    init_parser = argparse.ArgumentParser(description="Code or binary over LAN execution", add_help=False)
+    init_parser.add_argument('--port', action="store", type=int, default=8005, help="Network port to use, default 8005")
     group_client_server = init_parser.add_mutually_exclusive_group(required=True)
-    group_client_server.add_argument('--client', action="store_false")
-    group_client_server.add_argument('--server', action="store_true")
+    group_client_server.add_argument('--client', action="store_false", help="Start client with some query")
+    group_client_server.add_argument('--server', action="store_true", help="Start as server, waiting for connections")
+    init_parser.add_argument('--version', action='version', version='%(prog)s 0.1')
     init_args, other_args = init_parser.parse_known_args()
     if init_args.server is False:
         parser = argparse.ArgumentParser(parents=[init_parser])
-        parser.add_argument('--filename', action="store", type=str, required=True)
+        parser.add_argument('--localfile', action="store", type=str, help="Local file to load on servers")
+        parser.add_argument('--tries', action="store", type=int, default=1, help="How many times to exec")
+        group_arch_bin_script = parser.add_mutually_exclusive_group(required=True)
+        group_arch_bin_script.add_argument('--archive', action="store_true", help="If localfile is archive")
+        group_arch_bin_script.add_argument('--executable', action="store_false",
+                                           help="If localfile is binary or script")
+        parser.add_argument('EXECSTR', action="append", type=str,
+                            help="Your regular shell exec: filename and args, to be launched on remote machine")
+
+        args = parser.parse_args(other_args)
+    elif init_args.server is True:
+        parser = argparse.ArgumentParser(parents=[init_parser])
         args = parser.parse_args(other_args)
 
     if init_args.server:
