@@ -98,6 +98,9 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         command = datagram[8:16]
         data = datagram[16:]
 
+        print(self.whitelist)
+        print(address[0])
+        print(address[0] not in self.whitelist)
         if self.whitelist is not None and address[0] not in self.whitelist:
             print("IP Address not in whitelist, ignored")
             return
