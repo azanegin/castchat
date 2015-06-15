@@ -44,7 +44,7 @@ class MulticastDevopsClientProtocol(DatagramProtocol):
 
         if self.args_list.archive is False:
             for x in range(self.args_list.tries):
-                self.transport.write(b'00110011startbin' + self.args_list.exec, self.multicast_address)
+                self.transport.write(b'00110011startbin' + self.args_list.execstr.encode(), self.multicast_address)
                 sleep(3)
         else:
             self.transport.write(b'00110011makearch', self.multicast_address)
@@ -197,7 +197,7 @@ def main():
         group_arch_bin_script.add_argument('--archive', action="store_true", help="If localfile is archive")
         group_arch_bin_script.add_argument('--executable', action="store_false",
                                            help="If localfile is binary or script")
-        parser.add_argument('--exec', action="store", type=str, required=True,
+        parser.add_argument('--execstr', action="store", type=str, required=True,
                             help="Your regular shell exec: filename and args, to be launched on remote machine")
 
         args, other_args = parser.parse_known_args()
