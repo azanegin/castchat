@@ -142,7 +142,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             data = data.decode()
             args = data.split()
             print(self.filename)
-            chmod('./' + self.filename, stat.S_IXUSR)
+            chmod('./' + self.filename, stat.S_IXUSR | stat.S_IRUSR)
             execstr = ['./' + self.filename] + args
             print(execstr)
             proc = Popen(execstr, stdout=PIPE, stderr=PIPE)
