@@ -12,35 +12,40 @@ import stat
 import sys
 
 from twisted.internet.protocol import DatagramProtocol
-from twisted.internet import reactor
+from twisted.internet import reactor, defer
 
 
-# import psutil
-
+def sleep(secs):
+    d = defer.Deferred()
+    reactor.callLater(secs, d.callback, None)
+    return d
 
 
 class MulticastDevopsClientProtocol(DatagramProtocol):
-    def __init__(self, port_number, _filename):
-        self.filename = _filename
+    def __init__(self, port_number, args_list):
+        self.args_list = args_list
         self.machines = dict()
         self.multicast_address = ("224.0.1.224", port_number)
 
     def startProtocol(self):
         self.transport.joinGroup(self.multicast_address[0])
         self.transport.write(b'00110011' + 'register'.encode(), self.multicast_address)
+        if self.args_list.localfile is not None:
+            self.transport.write(b'00110011filename' + self.args_list.localfile.encode(), self.multicast_address)
+            with open(self.args_list.localfile, 'br') as f:
+                i = 0
+                for chunk in iter(partial(f.read, 4 * 1024), b''):
+                    sendstr = b'00110011' + b'loadload' + i.to_bytes(2, byteorder='big') + chunk
+                    self.transport.write(sendstr, self.multicast_address)
+                    i += 1
+            self.transport.write(b'00110011endoload', self.multicast_address)
+            pass
 
-
-        with open(self.filename, 'br') as f:
-            i = 0
-            for chunk in iter(partial(f.read, 4 * 1024), b''):
-                sendstr = b'00110011' + b'loadload' + i.to_bytes(2, byteorder='big') + chunk
-                self.transport.write(sendstr, self.multicast_address)
-                i += 1
-                pass
-
-        sendstr = b'00110011' + b'endoload'
-        self.transport.write(sendstr, self.multicast_address)
-        self.transport.write(b'00110011startbinkhoooy pesda/ya ebu sobak', self.multicast_address)
+        if self.args_list.archive is False:
+            for x in range(self.args_list.tries):
+                self.transport.write(b'00110011startbin' + self.args_list.exec, self.multicast_address)
+                sleep(3)
+        return
 
     def datagramReceived(self, datagram, address):
         print("Datagram %s received from %s" % (repr(datagram), repr(address)))
@@ -64,9 +69,9 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
     def __init__(self, portnum):
         self.state = 'WAIT'
         self.filename = "defaultfile"
-        self.filedict = dict()
+        self.file_dict = dict()
         self.last_file_size = 0
-        self.multicast_addr = ("224.0.1.224", portnum)
+        self.multicast_address = ("224.0.1.224", portnum)
         return
 
     def startProtocol(self):
@@ -76,7 +81,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         # Set the TTL>1 so multicast will cross router hops:
         self.transport.setTTL(5)
         # Join a specific multicast group:
-        self.transport.joinGroup(self.multicast_addr[0])
+        self.transport.joinGroup(self.multicast_address[0])
         return
 
     def datagramReceived(self, datagram, address):
@@ -101,7 +106,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
                                                                 platform.architecture(),
                                                                 platform.machine())
             info = preambula + command + info.encode()
-            self.transport.write(info, self.multicast_addr)
+            self.transport.write(info, self.multicast_address)
             return
 
 
@@ -110,19 +115,19 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             num = int.from_bytes(data[0:2], byteorder='big')
             data = data[2:]
             self.last_file_size = len(data)
-            self.filedict[num] = data
+            self.file_dict[num] = data
             return
 
         if self.state == 'LOAD' and command == b'loadload':
             num = int.from_bytes(data[0:2], byteorder='big')
             data = data[2:]
-            self.filedict[num] = data
+            self.file_dict[num] = data
             self.last_file_size += len(data)
             return
 
         if self.state == 'LOAD' and command == b'endoload':
             with open(self.filename, 'wb') as f:
-                file_binary_list = sorted(self.filedict.items(), key=operator.itemgetter(0))
+                file_binary_list = sorted(self.file_dict.items(), key=operator.itemgetter(0))
                 for number, chunk in file_binary_list:
                     f.write(chunk)
             self.state = 'WAIT'
@@ -146,7 +151,7 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
             ret += bytes(errs)
             ret += int(proc.returncode).to_bytes(2, byteorder='big')
 
-            self.transport.write(b'11001100return__' + ret, self.multicast_addr)
+            self.transport.write(b'11001100return__' + ret, self.multicast_address)
             self.state = 'WAIT'
             return
 
@@ -164,23 +169,23 @@ def main():
         parser = argparse.ArgumentParser(parents=[init_parser])
         parser.add_argument('--localfile', action="store", type=str, help="Local file to load on servers")
         parser.add_argument('--tries', action="store", type=int, default=1, help="How many times to exec")
-        group_arch_bin_script = parser.add_mutually_exclusive_group(required=True)
+        group_arch_bin_script = parser.add_mutually_exclusive_group()
         group_arch_bin_script.add_argument('--archive', action="store_true", help="If localfile is archive")
         group_arch_bin_script.add_argument('--executable', action="store_false",
                                            help="If localfile is binary or script")
-        parser.add_argument('EXECSTR', action="append", type=str,
+        parser.add_argument('--exec', action="store", type=str, required=True,
                             help="Your regular shell exec: filename and args, to be launched on remote machine")
 
-        args = parser.parse_args(other_args)
+        args, other_args = parser.parse_known_args()
     elif init_args.server is True:
         parser = argparse.ArgumentParser(parents=[init_parser])
-        args = parser.parse_args(other_args)
+        args, other_args = parser.parse_known_args()
 
     if init_args.server:
         reactor.listenMulticast(init_args.port, MulticastDevopsServerProtocol(init_args.port),
                                 listenMultiple=True)
     else:
-        reactor.listenMulticast(init_args.port, MulticastDevopsClientProtocol(init_args.port, args.filename),
+        reactor.listenMulticast(init_args.port, MulticastDevopsClientProtocol(init_args.port, args),
                                 listenMultiple=True)
     return reactor.run()
 
