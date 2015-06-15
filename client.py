@@ -151,19 +151,25 @@ class MulticastDevopsServerProtocol(DatagramProtocol):
         return
 
 def main():
-    filename = None
-    port_number = None
-    is_server = None
-    parser = argparse.ArgumentParser(prog="devopsscript", description="Code or binary over LAN execution")
-    parser.add_argument('--filename', action="store", dest='filename', type=str, default="defaultfile")
-    parser.add_argument('--server', action="store_true", dest='is_server')
-    parser.add_argument('--port', action="store", dest="port_number", default=8005)
-    parser.parse_args()
-    if is_server:
-        reactor.listenMulticast(port_number, MulticastDevopsServerProtocol(port_number), listenMultiple=True)
+    init_parser = argparse.ArgumentParser(description="Code or binary over LAN execution")
+    init_parser.add_argument('--port', action="store", type=int, default=8005)
+    group_client_server = init_parser.add_mutually_exclusive_group(required=True)
+    group_client_server.add_argument('--client', action="store_false")
+    group_client_server.add_argument('--server', action="store_true")
+    init_args, other_args = init_parser.parse_known_args()
+    if init_args.server is False:
+        parser = argparse.ArgumentParser(parents=[init_parser])
+        parser.add_argument('--filename', action="store", type=str, required=True)
+        args = parser.parse_args(other_args)
+
+    if init_args.server:
+        reactor.listenMulticast(init_args.port, MulticastDevopsServerProtocol(init_args.port),
+                                listenMultiple=True)
     else:
-        reactor.listenMulticast(port_number, MulticastDevopsClientProtocol(port_number, filename), listenMultiple=True)
-    reactor.run()
+        reactor.listenMulticast(init_args.port, MulticastDevopsClientProtocol(init_args.port, args.filename),
+                                listenMultiple=True)
+    return reactor.run()
+
 
 if __name__ == "__main__":
     ret = main()
