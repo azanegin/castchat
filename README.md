@@ -29,4 +29,3 @@
 * --filename - set path to local file including it's name, which should be sent to servers and executed on them
 * --port - set port on which script should work
 
-####Thank you for using!

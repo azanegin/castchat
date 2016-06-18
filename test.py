@@ -3,5 +3,5 @@ import sys
 __author__ = 'bokuto'
 
 print(sys.argv)
-print("YOLO")
+print("test")
 sys.exit(22)

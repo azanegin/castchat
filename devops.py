@@ -16,12 +16,13 @@ from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor, defer
 
 
+
 def sleep(secs):
     d = defer.Deferred()
     reactor.callLater(secs, d.callback, None)
     return d
 
-
+""" Main work class here, to made deferred callbacks in case of traffic """
 class MulticastDevopsClientProtocol(DatagramProtocol):
     def __init__(self, port_number, args_list):
         self.args_list = args_list
